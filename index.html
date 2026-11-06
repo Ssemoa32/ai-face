@@ -1,0 +1,614 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>AI Face</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap">
+
+<style>
+/* fullscreen blue face — Jansky-style */
+:root {
+  --bg1: #0b1640;
+  --bg2: #162560;
+  --eye: #ffffff;
+  --eye-glow: rgba(255,220,120,0.7);
+  --mouth: #ffffff;
+  --accent: #f5a623;
+  --card-bg: rgba(255,255,255,0.08);
+  --card-border: rgba(255,255,255,0.15);
+  --text: #ffffff;
+  --muted: rgba(255,255,255,0.5);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; margin: 0; padding: 0 }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+}
+
+body {
+  background: linear-gradient(160deg, var(--bg1) 0%, var(--bg2) 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  position: relative;
+  padding-left: max(0px, env(safe-area-inset-left,0px));
+  padding-right: max(0px, env(safe-area-inset-right,0px));
+}
+
+/* stars */
+#stars { position:fixed; inset:0; pointer-events:none; z-index:0 }
+
+/* task panel */
+#taskPanel {
+  position: fixed;
+  top: max(20px, env(safe-area-inset-top,20px));
+  right: max(16px, env(safe-area-inset-right,16px));
+  width: 180px;
+  background: var(--card-bg);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  padding: 12px 14px;
+  z-index: 10;
+  display: none;
+}
+#taskPanel.show { display: block }
+.task-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.task-title { font-size: 0.8rem; font-weight: 700; color: var(--text); letter-spacing:0.05em }
+#closeTask {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  font-size: 1rem; line-height:1; padding:2px;
+}
+.task-item {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 8px; font-size: 0.78rem; color: var(--text);
+}
+.task-item input[type=checkbox] { accent-color: var(--accent); width:14px; height:14px; cursor:pointer }
+.task-item .task-time {
+  margin-left: auto; font-size: 0.65rem; color: var(--accent); white-space: nowrap;
+}
+.task-done { text-decoration: line-through; opacity: 0.5 }
+#addTaskRow {
+  display: flex; gap: 6px; margin-top: 10px;
+}
+#taskInput {
+  flex:1; background: rgba(255,255,255,0.1); border: 1px solid var(--card-border);
+  border-radius: 8px; padding: 5px 8px; color: var(--text); font-family: inherit;
+  font-size: 0.72rem; outline: none;
+}
+#taskInput::placeholder { color: var(--muted) }
+#addTaskBtn {
+  background: var(--accent); border: none; border-radius: 8px;
+  color: #000; font-weight:700; font-size:1rem; width:28px; cursor:pointer;
+}
+
+/* face canvas */
+#faceCanvas {
+  position: fixed; inset: 0; width:100%; height:100%; z-index:1;
+}
+
+/* time display */
+#clock {
+  position: fixed;
+  bottom: max(130px, calc(env(safe-area-inset-bottom,0px) + 130px));
+  left: 50%; transform: translateX(-50%);
+  font-size: 0.75rem; letter-spacing: 0.15em;
+  color: var(--muted); z-index:5; white-space: nowrap;
+}
+
+/* bottom controls */
+#controls {
+  position: fixed;
+  bottom: max(24px, env(safe-area-inset-bottom,24px));
+  left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 14px; z-index: 10;
+}
+.ctrl-btn {
+  background: var(--card-bg);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--card-border);
+  border-radius: 50%;
+  width: 52px; height: 52px;
+  display: flex; align-items:center; justify-content:center;
+  cursor: pointer; font-size: 1.3rem; color: var(--text);
+  transition: all 0.2s; -webkit-tap-highlight-color:transparent; user-select:none;
+}
+.ctrl-btn:active { transform: scale(0.9) }
+.ctrl-btn.active { background: var(--accent); border-color: var(--accent); color:#000 }
+#micBtn.listening { background: rgba(255,80,80,0.7); border-color:#ff4444; animation: pulse 1s infinite }
+@keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,80,80,.5)} 50%{box-shadow:0 0 0 12px rgba(255,80,80,0)} }
+
+/* expression label */
+#exprLabel {
+  position: fixed; top: 50%; left:50%; transform:translate(-50%,-50%);
+  font-size: 0.7rem; letter-spacing:0.2em; color:rgba(255,255,255,0.15);
+  z-index:2; pointer-events:none; text-transform:uppercase;
+  margin-top: 90px;
+}
+
+/* speech bubble */
+#bubble {
+  position: fixed; bottom: max(100px, calc(env(safe-area-inset-bottom,0px)+100px));
+  left: 50%; transform: translateX(-50%);
+  background: var(--card-bg); backdrop-filter:blur(12px);
+  border: 1px solid var(--card-border); border-radius: 20px;
+  padding: 10px 18px; font-size:0.85rem; color:var(--text);
+  z-index: 10; max-width: 260px; text-align:center;
+  opacity:0; transition: opacity 0.3s; pointer-events:none;
+}
+#bubble.show { opacity:1 }
+</style>
+
+<canvas id="stars"></canvas>
+<canvas id="faceCanvas"></canvas>
+<div id="exprLabel"></div>
+<div id="clock"></div>
+<div id="bubble"></div>
+
+<!-- task panel -->
+<div id="taskPanel">
+  <div class="task-header">
+    <span class="task-title">Your list</span>
+    <button id="closeTask">×</button>
+  </div>
+  <div id="taskList"></div>
+  <div id="addTaskRow">
+    <input id="taskInput" type="text" placeholder="Add task...">
+    <button id="addTaskBtn">+</button>
+  </div>
+</div>
+
+<!-- bottom controls -->
+<div id="controls">
+  <button class="ctrl-btn" id="taskToggle" title="Tasks" onclick="toggleTasks()">📋</button>
+  <button class="ctrl-btn" id="micBtn" title="Mic" onclick="toggleMic()">🎤</button>
+  <button class="ctrl-btn" id="moodBtn" title="Mood" onclick="cycleMood()">😐</button>
+  <button class="ctrl-btn" id="serverBtn" title="Server" onclick="pingServer()">📡</button>
+</div>
+
+<script>
+// ─── Stars ───────────────────────────────────────────
+const sc = document.getElementById('stars');
+const sx = sc.getContext('2d');
+let stars = [];
+function initStars() {
+  sc.width = window.innerWidth; sc.height = window.innerHeight;
+  stars = Array.from({length:80}, () => ({
+    x: Math.random()*sc.width, y: Math.random()*sc.height,
+    r: Math.random()*1.5+0.3, a: Math.random(), da: (Math.random()-.5)*0.005
+  }));
+}
+function drawStars() {
+  sx.clearRect(0,0,sc.width,sc.height);
+  stars.forEach(s => {
+    s.a = Math.max(0.1,Math.min(1, s.a+s.da));
+    if(s.a<=0.1||s.a>=1) s.da*=-1;
+    sx.beginPath(); sx.arc(s.x,s.y,s.r,0,Math.PI*2);
+    sx.fillStyle=`rgba(255,255,255,${s.a})`; sx.fill();
+  });
+}
+
+// ─── Face ─────────────────────────────────────────────
+const fc = document.getElementById('faceCanvas');
+const fx = fc.getContext('2d');
+
+let mood = 'idle'; // idle | thinking | speaking | happy | sleeping | listening
+let tick = 0, mPhase = 0;
+let blinkT=0, blinkDur=0, nextBlink=100, isBlinking=false;
+let eyeH=1, eyeHtgt=1;
+let dotAngle=0, pulseT=0;
+let zzz=[], sparks=[];
+let eyeLColor = '#ffffff'; // left eye tint
+let eyeRColor = '#ffffff';
+
+const MOODS = {
+  idle:     { icon:'😐', label:'IDLE' },
+  listening:{ icon:'👂', label:'LISTENING' },
+  thinking: { icon:'💭', label:'THINKING' },
+  speaking: { icon:'💬', label:'SPEAKING' },
+  happy:    { icon:'😄', label:'HAPPY' },
+  sleeping: { icon:'😴', label:'SLEEP' },
+};
+
+function lerp(a,b,t){return a+(b-a)*t}
+function glow(color,blur){fx.shadowColor=color;fx.shadowBlur=blur}
+function noGlow(){fx.shadowBlur=0}
+
+function drawEye(cx,cy,w,h,pupilOff,eyeHScale,color) {
+  const eh = h*eyeHScale, ey = cy-eh/2;
+  const r = Math.min(eh/2, w*.4);
+  // outer glow
+  fx.beginPath();
+  fx.roundRect(cx-w/2, ey, w, eh, r);
+  fx.fillStyle = '#fff';
+  glow(color, 40);
+  fx.fill();
+  noGlow();
+  // warm inner gradient
+  const ig = fx.createRadialGradient(cx+pupilOff*w*.15, cy, 0, cx, cy, w*.6);
+  ig.addColorStop(0, '#ffffff');
+  ig.addColorStop(0.5, color === '#ffffff' ? '#ffe8a0' : color);
+  ig.addColorStop(1, 'rgba(255,200,80,0.4)');
+  fx.beginPath();
+  fx.roundRect(cx-w/2, ey, w, eh, r);
+  fx.fillStyle = ig;
+  fx.fill();
+}
+
+function drawMouthLine(cx, cy, mode, phase, W) {
+  fx.lineWidth = 2.5; fx.strokeStyle = 'rgba(255,255,255,0.85)';
+  fx.lineCap = 'round'; glow('#fff', 6);
+  const w = W*0.18;
+  if(mode === 'flat') {
+    fx.beginPath(); fx.moveTo(cx-w, cy); fx.lineTo(cx+w, cy); fx.stroke();
+  } else if(mode === 'wave') {
+    fx.beginPath();
+    for(let i=0;i<=40;i++){
+      const x=cx-w+i*(w*2/40);
+      const y=cy+Math.sin(i*0.4+phase)*6;
+      i===0?fx.moveTo(x,y):fx.lineTo(x,y);
+    }
+    fx.stroke();
+  } else if(mode === 'smile') {
+    fx.beginPath(); fx.arc(cx, cy, w*.7, 0.1*Math.PI, 0.9*Math.PI); fx.stroke();
+  } else if(mode === 'hmm') {
+    fx.beginPath();
+    fx.moveTo(cx-w*.5, cy); fx.quadraticCurveTo(cx, cy+8, cx+w*.5, cy); fx.stroke();
+  } else if(mode === 'wiggle') {
+    fx.beginPath();
+    for(let i=0;i<=30;i++){
+      const x=cx-w*.6+i*(w*1.2/30);
+      const y=cy+Math.sin(i*0.8+phase)*Math.abs(Math.sin(phase*0.3))*10;
+      i===0?fx.moveTo(x,y):fx.lineTo(x,y);
+    }
+    fx.stroke();
+  }
+  noGlow();
+}
+
+function drawSleepEyes(cx, cy, r) {
+  fx.strokeStyle='rgba(255,255,255,0.7)'; fx.lineWidth=2.5; fx.lineCap='round';
+  glow('#fff',8);
+  [-1,1].forEach(s=>{
+    const ex=cx+s*r*.32;
+    fx.beginPath(); fx.moveTo(ex-r*.13,cy); fx.lineTo(ex+r*.13,cy); fx.stroke();
+  });
+  noGlow();
+}
+
+function spawnZzz(cx,cy,r){
+  if(Math.random()<0.04) zzz.push({x:cx+r*.38,y:cy-r*.05,vx:.5+Math.random()*.4,vy:-.7-Math.random()*.4,a:1,sz:10+Math.floor(Math.random()*3)*5});
+}
+function tickZzz(){zzz=zzz.filter(p=>p.a>0.03);zzz.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.a-=0.012});}
+function drawZzz(){
+  zzz.forEach(p=>{fx.globalAlpha=p.a;fx.fillStyle='rgba(255,255,255,0.8)';glow('#fff',5);fx.font=`bold ${p.sz}px 'Space Grotesk',sans-serif`;fx.fillText('Z',p.x,p.y);noGlow()});
+  fx.globalAlpha=1;
+}
+
+function spawnSpark(cx,cy,r){
+  if(Math.random()<0.08){const a=Math.random()*Math.PI*2,d=r*(.7+Math.random()*.5);sparks.push({x:cx+Math.cos(a)*d,y:cy+Math.sin(a)*d,life:1,sz:2+Math.random()*4});}
+}
+function drawSparks(){
+  sparks=sparks.filter(s=>s.life>0.04);
+  sparks.forEach(s=>{s.life-=0.04;fx.beginPath();fx.arc(s.x,s.y,s.sz*s.life,0,Math.PI*2);fx.fillStyle='rgba(255,220,80,0.9)';fx.globalAlpha=s.life;glow('#ffd700',12);fx.fill();noGlow();fx.globalAlpha=1;});
+}
+
+function drawThinkDots(cx,cy,r){
+  dotAngle+=0.05;
+  for(let i=0;i<5;i++){
+    const a=dotAngle+(i/5)*Math.PI*2;
+    const dx=cx+Math.cos(a)*(r+18), dy=cy+Math.sin(a)*(r+18);
+    const p=0.5+0.5*Math.sin(tick*.1+i*1.3);
+    fx.beginPath();fx.arc(dx,dy,2.5+p*2,0,Math.PI*2);
+    fx.fillStyle='rgba(255,255,255,0.7)';fx.globalAlpha=0.4+p*.5;
+    glow('#fff',8);fx.fill();noGlow();fx.globalAlpha=1;
+  }
+}
+
+function drawListenRings(cx,cy,r){
+  pulseT+=0.03;
+  for(let i=0;i<3;i++){
+    const t=(pulseT+i/3)%1;
+    fx.beginPath();fx.arc(cx,cy,r+t*r*.5,0,Math.PI*2);
+    fx.strokeStyle='rgba(255,255,255,0.3)';fx.lineWidth=1.5;fx.globalAlpha=(1-t)*.5;fx.stroke();fx.globalAlpha=1;
+  }
+}
+
+function render() {
+  const W=fc.width, H=fc.height, cx=W/2, cy=H/2;
+  fx.clearRect(0,0,W,H);
+
+  // determine eye scale based on face size
+  const r = Math.min(W,H)*0.35;
+  const sc2 = getEyeScale();
+  const EW = r*0.52*sc2, EH = r*0.45*sc2;
+  const eyeY = cy - r*0.15;
+  const eyeSep = r*0.52;
+
+  // blink
+  if(mood!=='sleeping'){
+    blinkT++;
+    if(blinkT>=nextBlink&&!isBlinking){isBlinking=true;blinkDur=0;}
+    if(isBlinking){
+      blinkDur++;
+      eyeHtgt=blinkDur<5?1-blinkDur/5:blinkDur<9?0:(blinkDur-9)/5;
+      if(blinkDur>=15){isBlinking=false;blinkT=0;nextBlink=80+Math.random()*120;eyeHtgt=1;}
+    } else eyeHtgt=1;
+    eyeH=lerp(eyeH,eyeHtgt,.3);
+  }
+
+  tick++; mPhase+=mood==='speaking'?.2:mood==='happy'?.08:.04;
+
+  // effects
+  if(mood==='thinking') drawThinkDots(cx,cy,r);
+  if(mood==='listening') drawListenRings(cx,cy,r);
+  if(mood==='happy'){spawnSpark(cx,cy,r);drawSparks();}
+
+  const eyeColor = mood==='happy'?'#ffd700':mood==='sleeping'?'rgba(150,150,255,0.7)':'#ffffff';
+
+  if(mood==='sleeping'){
+    spawnZzz(cx,cy,r); tickZzz(); drawZzz();
+    drawSleepEyes(cx,cy,r);
+    drawMouthLine(cx, cy+r*.55, 'flat', 0, W);
+  } else if(mood==='happy'){
+    // happy arc eyes
+    [-1,1].forEach(s=>{
+      const ex=cx+s*eyeSep;
+      fx.beginPath(); fx.arc(ex, eyeY+EH*.2, EW*.45, Math.PI, 0);
+      fx.fillStyle='#ffd700'; glow('#ffd700',30); fx.fill(); noGlow();
+    });
+    drawMouthLine(cx, cy+r*.55, 'smile', mPhase, W);
+  } else {
+    let pupilOff=0;
+    if(mood==='thinking') pupilOff=Math.sin(tick*.05)*.4;
+    [-1,1].forEach(s=>{
+      drawEye(cx+s*eyeSep, eyeY, EW, EH, s*pupilOff, mood==='sleeping'?0:eyeH, eyeColor);
+    });
+    const my = cy+r*.55;
+    if(mood==='speaking') drawMouthLine(cx,my,'wiggle',mPhase,W);
+    else if(mood==='thinking') drawMouthLine(cx,my,'hmm',mPhase,W);
+    else if(mood==='listening') drawMouthLine(cx,my,'wave',mPhase,W);
+    else drawMouthLine(cx,my,'flat',mPhase,W);
+  }
+
+  drawStars();
+  requestAnimationFrame(render);
+}
+
+// ─── Clock ────────────────────────────────────────────
+function updateClock(){
+  const now=new Date();
+  const h=now.getHours().toString().padStart(2,'0');
+  const m=now.getMinutes().toString().padStart(2,'0');
+  document.getElementById('clock').textContent=`${h}:${m}`;
+}
+setInterval(updateClock,10000); updateClock();
+
+// ─── Resize ───────────────────────────────────────────
+function resize(){
+  fc.width=window.innerWidth; fc.height=window.innerHeight;
+  sc.width=window.innerWidth; sc.height=window.innerHeight;
+  initStars();
+}
+window.addEventListener('resize',resize); resize();
+
+// ─── Tasks ────────────────────────────────────────────
+let tasks=[];
+try { tasks=JSON.parse(localStorage.getItem('ai_tasks')||'[]'); } catch(e){}
+
+function saveTasks(){ try{localStorage.setItem('ai_tasks',JSON.stringify(tasks));}catch(e){} }
+
+function renderTasks(){
+  const list=document.getElementById('taskList');
+  list.innerHTML='';
+  tasks.forEach((t,i)=>{
+    const d=document.createElement('div'); d.className='task-item';
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=t.done;
+    cb.onchange=()=>{tasks[i].done=cb.checked; saveTasks(); renderTasks();};
+    const lbl=document.createElement('span'); lbl.textContent=t.text;
+    if(t.done) lbl.classList.add('task-done');
+    const tm=document.createElement('span'); tm.className='task-time'; tm.textContent=t.time||'';
+    d.append(cb,lbl,tm); list.appendChild(d);
+  });
+}
+
+function toggleTasks(){
+  const p=document.getElementById('taskPanel');
+  p.classList.toggle('show');
+  renderTasks();
+}
+
+document.getElementById('closeTask').onclick=()=>document.getElementById('taskPanel').classList.remove('show');
+
+document.getElementById('addTaskBtn').onclick=addTask;
+document.getElementById('taskInput').onkeydown=e=>{if(e.key==='Enter')addTask();};
+
+function addTask(){
+  const inp=document.getElementById('taskInput');
+  const text=inp.value.trim(); if(!text) return;
+  const now=new Date();
+  const time=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+  tasks.push({text,done:false,time}); inp.value='';
+  saveTasks(); renderTasks();
+  showBubble('Added: '+text);
+}
+
+// ─── Bubble ───────────────────────────────────────────
+let bubbleTimer;
+function showBubble(msg){
+  const b=document.getElementById('bubble');
+  b.textContent=msg; b.classList.add('show');
+  clearTimeout(bubbleTimer);
+  bubbleTimer=setTimeout(()=>b.classList.remove('show'),3000);
+}
+
+// ─── Mic (Web Speech) ─────────────────────────────────
+let recognition=null, isListening=false;
+
+function toggleMic(){
+  if(!('webkitSpeechRecognition' in window||'SpeechRecognition' in window)){
+    showBubble('Speech API not supported'); return;
+  }
+  if(isListening){ recognition&&recognition.stop(); return; }
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  recognition=new SR();
+  recognition.lang='ar-SA'; recognition.continuous=false; recognition.interimResults=false;
+  recognition.onstart=()=>{ isListening=true; setMood('listening'); document.getElementById('micBtn').classList.add('listening'); };
+  recognition.onend=()=>{ isListening=false; setMood('idle'); document.getElementById('micBtn').classList.remove('listening'); };
+  recognition.onresult=e=>{
+    const text=e.results[0][0].transcript;
+    showBubble('🎤 '+text);
+    sendToServer(text);
+  };
+  recognition.onerror=()=>{ isListening=false; setMood('idle'); document.getElementById('micBtn').classList.remove('listening'); };
+  recognition.start();
+}
+
+// intensity تؤثر على EW الفعلي
+function getEyeScale(){ return 0.75 + moodIntensity*0.35; }
+
+// ─── Server / Direct DeepSeek ─────────────────────────
+let SERVER = localStorage.getItem('ai_face_server') || '';
+let DS_KEY  = localStorage.getItem('ai_face_dskey')  || '';
+let chatHistory = [];
+
+// Auto-detect provider from key prefix
+function getProvider(key){
+  if(key.startsWith('nvapi-')) return 'nvidia';
+  if(key.startsWith('sk-or-')) return 'openrouter';
+  return 'deepseek';
+}
+const PROVIDERS = {
+  nvidia:     { url:'https://integrate.api.nvidia.com/v1/chat/completions', model:'meta/llama-3.2-11b-vision-instruct' },
+  openrouter: { url:'https://openrouter.ai/api/v1/chat/completions',         model:'deepseek/deepseek-chat:free' },
+  deepseek:   { url:'https://api.deepseek.com/v1/chat/completions',           model:'deepseek-chat' }
+};
+const DS_SYS = `أنت محرك تعابير وجه لذكاء اصطناعي اسمه SimoAI.
+أرجع JSON فقط بهذا الشكل — بدون أي نص إضافي:
+{"mood":"<التعبير>","intensity":<0.1-1.0>,"reply":"<الرد>","duration":<2-8>}
+التعابير: idle|listening|thinking|speaking|happy|excited|sad|confused|sleeping
+intensity يعبر عن قوة المشاعر. رد بالعربية أو الإنجليزية حسب السياق.`;
+
+function extractJSON(raw){
+  try{ return JSON.parse(raw.trim()); }catch(e){}
+  try{ const m=raw.match(/```(?:json)?\s*([\s\S]+?)```/); if(m)return JSON.parse(m[1].trim()); }catch(e){}
+  try{ const m=raw.match(/\{[\s\S]+\}/); if(m)return JSON.parse(m[0]); }catch(e){}
+  return {mood:'speaking',intensity:0.6,reply:raw.slice(0,200),duration:3};
+}
+
+async function callDeepSeek(text){
+  const p = PROVIDERS[getProvider(DS_KEY)];
+  const msgs=[{role:'system',content:DS_SYS}];
+  chatHistory.slice(-6).forEach(h=>msgs.push(h));
+  msgs.push({role:'user',content:text});
+  const r=await fetch(p.url,{
+    method:'POST',
+    headers:{
+      'Authorization':'Bearer '+DS_KEY,
+      'Content-Type':'application/json',
+      'HTTP-Referer':'https://simocore.tech',
+      'X-Title':'SimoAI Face'
+    },
+    body:JSON.stringify({model:p.model,messages:msgs,temperature:0.7,max_tokens:250})
+  });
+  if(!r.ok) throw new Error(r.status);
+  const d=await r.json();
+  return extractJSON(d.choices[0].message.content);
+}
+
+async function sendToServer(text){
+  const useDS = !SERVER && DS_KEY;
+  const hasAny = SERVER || DS_KEY;
+  if(!hasAny){ showBubble('⚙️ اضغط 📡 واضبط الاتصال'); return; }
+  setMood('thinking');
+  try{
+    let res;
+    if(useDS){
+      res = await callDeepSeek(text);
+    } else {
+      const r=await fetch(SERVER+'/api/chat',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({text,history:chatHistory})
+      });
+      if(!r.ok) throw new Error(r.status);
+      res=await r.json();
+    }
+    chatHistory.push({role:'user',content:text});
+    chatHistory.push({role:'assistant',content:res.reply||''});
+    if(chatHistory.length>12) chatHistory=chatHistory.slice(-12);
+    const dur=(res.duration||3)*1000;
+    setMoodIntensity(res.mood||'speaking',res.intensity||0.7);
+    if(res.reply) showBubble(res.reply);
+    setTimeout(()=>{ if(mood!=='sleeping') setMood('idle'); },dur);
+  }catch(e){
+    setMood('idle');
+    showBubble('❌ '+(useDS?'خطأ DeepSeek':'تعذر الاتصال'));
+  }
+}
+
+function pingServer(){
+  const choice=prompt(
+    'اختر الوضع:\n1 — مفتاح DeepSeek مباشر\n2 — رابط سيرفر VPS\n\nاكتب 1 أو 2',
+    DS_KEY?'1':'2'
+  );
+  if(choice===null) return;
+  if(choice.trim()==='1'){
+    const k=prompt('مفتاح API (nvapi-... أو sk-or-... أو sk-...):',DS_KEY||'');
+    if(k===null) return;
+    DS_KEY=k.trim();
+    try{ localStorage.setItem('ai_face_dskey',DS_KEY); }catch(e){}
+    if(!DS_KEY){ showBubble('تم مسح المفتاح'); return; }
+    setMood('thinking');
+    callDeepSeek('مرحبا').then(res=>{
+      const pv=getProvider(DS_KEY);
+      showBubble('✅ '+(pv==='nvidia'?'NVIDIA':pv==='openrouter'?'OpenRouter':'DeepSeek')+' جاهز! '+(res.reply||''));
+      setMood('happy'); setTimeout(()=>setMood('idle'),3000);
+    }).catch(()=>{ showBubble('❌ مفتاح خاطئ'); setMood('idle'); });
+  } else {
+    const url=prompt('رابط السيرفر (مثال: http://72.61.164.77:7860)',SERVER||'');
+    if(url===null) return;
+    SERVER=url.trim().replace(/\/$/,'');
+    try{ localStorage.setItem('ai_face_server',SERVER); }catch(e){}
+    if(!SERVER){ showBubble('تم مسح الرابط'); return; }
+    setMood('thinking');
+    fetch(SERVER+'/api/health').then(r=>r.json()).then(d=>{
+      showBubble('✅ متصل — '+d.server);
+      setMood('happy'); setTimeout(()=>setMood('idle'),2000);
+    }).catch(()=>{ showBubble('❌ لا يوجد اتصال'); setMood('idle'); });
+  }
+}
+
+// intensity: يؤثر على حجم العيون وسرعة التحريك
+let moodIntensity = 0.7;
+function setMoodIntensity(m, intensity){
+  moodIntensity = Math.max(0.1, Math.min(1, intensity||0.7));
+  setMood(m);
+}
+
+// ─── Mood ─────────────────────────────────────────────
+const moodOrder=['idle','listening','thinking','speaking','happy','sleeping'];
+let moodIdx=0;
+
+function cycleMood(){
+  moodIdx=(moodIdx+1)%moodOrder.length;
+  setMood(moodOrder[moodIdx]);
+}
+
+function setMood(m){
+  mood=m;
+  if(m!=='sleeping') zzz=[];
+  if(m!=='happy') sparks=[];
+  document.getElementById('moodBtn').textContent=MOODS[m]?.icon||'😐';
+  document.getElementById('exprLabel').textContent=MOODS[m]?.label||'';
+}
+
+render();
+initStars();
+</script>
+
+</body></html>
