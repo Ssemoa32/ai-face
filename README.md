@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="assets/ai-face-icon.svg" alt="SimoAI Face icon" width="120" height="120" />
-  <h1>AI Face — SimoAI</h1>
+  <img src="assets/ai-face-icon.svg" alt="SimoAi Fice icon" width="120" height="120" />
+  <h1>Ai Fice — SimoAI</h1>
   <p><strong>واجهة وجه تفاعلية لمساعدك الذكي</strong></p>
   <p>وجه متحرك يتفاعل مع المحادثة، يستمع للصوت، ويعرض مهامك في تجربة أنيقة تعمل مباشرة في المتصفح.</p>
 
@@ -24,7 +24,7 @@
 
 1. نزّل المشروع أو استنسخه:
    ```bash
-   git clone https://github.com/Ssemoa32/ai-face.git
+   git clone https://github.com/Ssemoa32/ai-fice.git
    cd ai-face
    ```
 2. افتح `index.html` في متصفح حديث. ولأفضل توافق مع ميزات الصوت وطلبات الشبكة، شغّله من خادم محلي مثل إضافة Live Server أو:
