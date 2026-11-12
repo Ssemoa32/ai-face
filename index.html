@@ -475,6 +475,7 @@ function getEyeScale(){ return 0.75 + moodIntensity*0.35; }
 // ─── Server / Direct DeepSeek ─────────────────────────
 let SERVER = localStorage.getItem('ai_face_server') || '';
 let DS_KEY  = localStorage.getItem('ai_face_dskey')  || '';
+let CUSTOM  = JSON.parse(localStorage.getItem('ai_face_custom') || 'null');
 let chatHistory = [];
 
 // Auto-detect provider from key prefix
@@ -502,18 +503,27 @@ function extractJSON(raw){
 }
 
 async function callDeepSeek(text){
-  const p = PROVIDERS[getProvider(DS_KEY)];
+  let p, key, authHeader='Authorization';
+  if(CUSTOM){
+    p = { url: CUSTOM.url, model: CUSTOM.model };
+    key = CUSTOM.key;
+    authHeader = CUSTOM.authHeader || 'Authorization';
+  } else {
+    p = PROVIDERS[getProvider(DS_KEY)];
+    key = DS_KEY;
+  }
   const msgs=[{role:'system',content:DS_SYS}];
   chatHistory.slice(-6).forEach(h=>msgs.push(h));
   msgs.push({role:'user',content:text});
+  const headers = {
+    'Content-Type':'application/json',
+    'HTTP-Referer':'https://simocore.tech',
+    'X-Title':'SimoAI Face'
+  };
+  if(key) headers[authHeader] = 'Bearer '+key;
   const r=await fetch(p.url,{
     method:'POST',
-    headers:{
-      'Authorization':'Bearer '+DS_KEY,
-      'Content-Type':'application/json',
-      'HTTP-Referer':'https://simocore.tech',
-      'X-Title':'SimoAI Face'
-    },
+    headers,
     body:JSON.stringify({model:p.model,messages:msgs,temperature:0.7,max_tokens:250})
   });
   if(!r.ok) throw new Error(r.status);
@@ -522,8 +532,8 @@ async function callDeepSeek(text){
 }
 
 async function sendToServer(text){
-  const useDS = !SERVER && DS_KEY;
-  const hasAny = SERVER || DS_KEY;
+  const useDS = !SERVER && (DS_KEY || CUSTOM);
+  const hasAny = SERVER || DS_KEY || CUSTOM;
   if(!hasAny){ showBubble('⚙️ اضغط 📡 واضبط الاتصال'); return; }
   setMood('thinking');
   try{
@@ -547,21 +557,25 @@ async function sendToServer(text){
     setTimeout(()=>{ if(mood!=='sleeping') setMood('idle'); },dur);
   }catch(e){
     setMood('idle');
-    showBubble('❌ '+(useDS?'خطأ DeepSeek':'تعذر الاتصال'));
+    const errMsg = CUSTOM ? 'خطأ المزود المخصص' : (useDS ? 'خطأ DeepSeek' : 'تعذر الاتصال');
+    showBubble('❌ '+errMsg);
   }
 }
 
 function pingServer(){
   const choice=prompt(
-    'اختر الوضع:\n1 — مفتاح DeepSeek مباشر\n2 — رابط سيرفر VPS\n\nاكتب 1 أو 2',
-    DS_KEY?'1':'2'
+    'اختر الوضع:\n1 — مفتاح DeepSeek مباشر\n2 — رابط سيرفر VPS\n3 — مزود مخصص (Custom)\n\nاكتب 1 أو 2 أو 3',
+    CUSTOM?'3':(DS_KEY?'1':'2')
   );
   if(choice===null) return;
-  if(choice.trim()==='1'){
+  const c=choice.trim();
+  if(c==='1'){
     const k=prompt('مفتاح API (nvapi-... أو sk-or-... أو sk-...):',DS_KEY||'');
     if(k===null) return;
     DS_KEY=k.trim();
     try{ localStorage.setItem('ai_face_dskey',DS_KEY); }catch(e){}
+    // إلغاء المزود المخصص لتفادي التعارض
+    CUSTOM=null; try{ localStorage.removeItem('ai_face_custom'); }catch(e){}
     if(!DS_KEY){ showBubble('تم مسح المفتاح'); return; }
     setMood('thinking');
     callDeepSeek('مرحبا').then(res=>{
@@ -569,6 +583,8 @@ function pingServer(){
       showBubble('✅ '+(pv==='nvidia'?'NVIDIA':pv==='openrouter'?'OpenRouter':'DeepSeek')+' جاهز! '+(res.reply||''));
       setMood('happy'); setTimeout(()=>setMood('idle'),3000);
     }).catch(()=>{ showBubble('❌ مفتاح خاطئ'); setMood('idle'); });
+  } else if(c==='3'){
+    setupCustom();
   } else {
     const url=prompt('رابط السيرفر (مثال: http://72.61.164.77:7860)',SERVER||'');
     if(url===null) return;
@@ -581,6 +597,37 @@ function pingServer(){
       setMood('happy'); setTimeout(()=>setMood('idle'),2000);
     }).catch(()=>{ showBubble('❌ لا يوجد اتصال'); setMood('idle'); });
   }
+}
+
+function setupCustom(){
+  const ex = CUSTOM || {};
+  const url=prompt('رابط API للمزود المخصص (مثال: https://api.openai.com/v1/chat/completions أو http://localhost:11434/v1/chat/completions):', ex.url||'');
+  if(url===null) return;
+  const model=prompt('اسم النموذج (Model):', ex.model||'');
+  if(model===null) return;
+  const key=prompt('مفتاح API (اتركه فارغًا للسيرفرات المحلية مثل Ollama):', ex.key||'');
+  if(key===null) return;
+  const authHeader=prompt('اسم ترويسة المصادقة (افتراضي: Authorization) — اتركه للافتراضي:', ex.authHeader||'Authorization');
+  if(authHeader===null) return;
+
+  CUSTOM = {
+    url: url.trim(),
+    model: model.trim(),
+    key: key.trim(),
+    authHeader: (authHeader||'Authorization').trim()
+  };
+  try{ localStorage.setItem('ai_face_custom', JSON.stringify(CUSTOM)); }catch(e){}
+  if(!CUSTOM.url){
+    CUSTOM=null; try{ localStorage.removeItem('ai_face_custom'); }catch(e){}
+    showBubble('تم مسح المزود المخصص'); return;
+  }
+  // إلغاء مفتاح DeepSeek لتفادي التعارض
+  DS_KEY=''; try{ localStorage.removeItem('ai_face_dskey'); }catch(e){}
+  setMood('thinking');
+  callDeepSeek('مرحبا').then(res=>{
+    showBubble('✅ المزود المخصص جاهز! '+(res.reply||''));
+    setMood('happy'); setTimeout(()=>setMood('idle'),3000);
+  }).catch(()=>{ showBubble('❌ فشل الاتصال بالمزود المخصص'); setMood('idle'); });
 }
 
 // intensity: يؤثر على حجم العيون وسرعة التحريك
