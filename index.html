@@ -447,6 +447,21 @@ function showBubble(msg){
   bubbleTimer=setTimeout(()=>b.classList.remove('show'),3000);
 }
 
+function speakReply(text){
+  if(!('speechSynthesis' in window)||!('SpeechSynthesisUtterance' in window)) return false;
+  window.speechSynthesis.cancel();
+  const utterance=new SpeechSynthesisUtterance(text);
+  utterance.lang=/[\u0600-\u06FF]/.test(text)?'ar-SA':'en-US';
+  const voices=window.speechSynthesis.getVoices();
+  const voice=voices.find(v=>v.lang.toLowerCase().startsWith(utterance.lang.slice(0,2)));
+  if(voice) utterance.voice=voice;
+  utterance.onstart=()=>setMood('speaking');
+  utterance.onend=()=>{ if(mood==='speaking') setMood('idle'); };
+  utterance.onerror=()=>{ if(mood==='speaking') setMood('idle'); };
+  window.speechSynthesis.speak(utterance);
+  return true;
+}
+
 // ─── Mic (Web Speech) ─────────────────────────────────
 let recognition=null, isListening=false;
 
@@ -455,6 +470,7 @@ function toggleMic(){
     showBubble('Speech API not supported'); return;
   }
   if(isListening){ recognition&&recognition.stop(); return; }
+  if('speechSynthesis' in window) window.speechSynthesis.cancel();
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   recognition=new SR();
   recognition.lang='ar-SA'; recognition.continuous=false; recognition.interimResults=false;
@@ -544,7 +560,8 @@ async function sendToServer(text){
     const dur=(res.duration||3)*1000;
     setMoodIntensity(res.mood||'speaking',res.intensity||0.7);
     if(res.reply) showBubble(res.reply);
-    setTimeout(()=>{ if(mood!=='sleeping') setMood('idle'); },dur);
+    const speaking=res.reply?speakReply(res.reply):false;
+    if(!speaking) setTimeout(()=>{ if(mood!=='sleeping') setMood('idle'); },dur);
   }catch(e){
     setMood('idle');
     showBubble('❌ '+(useDS?'خطأ DeepSeek':'تعذر الاتصال'));
